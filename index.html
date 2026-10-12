@@ -250,6 +250,31 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
   </div>
 </div>
 
+<div id="modalPerna" class="fixed inset-0 bg-black/50 z-50 hidden overflow-y-auto p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-md p-5 m-auto">
+    <h3 id="tituloModalPerna" class="font-black text-lg mb-4">Editar perna</h3>
+    <label class="block text-xs font-bold text-slate-500 mb-1">Jogo</label>
+    <input id="pEvento" class="w-full border rounded-lg px-3 py-2 mb-3 text-sm" placeholder="Ex: CLE Browns x NY Jets">
+    <label class="block text-xs font-bold text-slate-500 mb-1">Palpite</label>
+    <input id="pPalpite" class="w-full border rounded-lg px-3 py-2 mb-3 text-sm" placeholder="Ex: Menos de 39.5 (Total de Pontos)">
+    <label class="block text-xs font-bold text-slate-500 mb-1">Odd da perna</label>
+    <input id="pOdd" type="number" step="0.01" min="1" class="w-full border rounded-lg px-3 py-2 mb-3 text-sm" placeholder="1.90">
+    <label class="block text-xs font-bold text-slate-500 mb-1">Resultado da perna</label>
+    <div class="flex gap-2 mb-3">
+      <button id="btnPernaGanhou" onclick="setStatusEditorPerna('ganhou')" class="flex-1 rounded-lg py-2 text-lg border">🟢</button>
+      <button id="btnPernaPerdeu" onclick="setStatusEditorPerna('perdeu')" class="flex-1 rounded-lg py-2 text-lg border">🔴</button>
+      <button id="btnPernaVoid" onclick="setStatusEditorPerna('void')" class="flex-1 rounded-lg py-2 text-lg border">➖</button>
+      <button id="btnPernaAberta" onclick="setStatusEditorPerna('aberta')" class="flex-1 rounded-lg py-2 text-lg border">⏳</button>
+    </div>
+    <label class="block text-xs font-bold text-slate-500 mb-1">Placar / conta da linha</label>
+    <textarea id="pDetalhe" rows="2" class="w-full border rounded-lg px-3 py-2 mb-4 text-sm" placeholder="Ex: Jets 17 x 12 Browns — total 29, abaixo de 39.5"></textarea>
+    <div class="flex gap-2">
+      <button onclick="fecharModal('modalPerna')" class="flex-1 border rounded-lg py-2 text-sm font-semibold">Cancelar</button>
+      <button onclick="salvarPerna()" class="flex-1 btn-ouro rounded-lg py-2 text-sm font-black">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-marinho text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-lg z-50 hidden no-print"></div>
 
 <script>
@@ -520,24 +545,137 @@ async function excluirBilhete(id) {
   if (error) { toast('Erro ao excluir'); return; }
   toast('Bilhete excluído'); carregar();
 }
+/* ============ REGRAS DE CORREÇÃO/LIQUIDAÇÃO (mesmas do BetControl) ============
+   - cada aposta é independente: simples avalia sozinha; múltipla só ganha com todas as pernas ganhas
+   - qualquer perna perdida zera o bilhete
+   - void conta como odd 1 no cálculo da múltipla; todas void = bilhete void (stake devolvido)
+   - status + detalhe da perna sempre gravados juntos
+============================================================================ */
+function oddEfetivaBilhete(b) {
+  let odd = Number(b.odd) || 0;
+  (b.selecoes || []).forEach(l => {
+    if (l.status === 'void' && Number(l.odd) > 0 && odd > 0) odd = odd / Number(l.odd);
+  });
+  return +odd.toFixed(2);
+}
+function recalcularBilhete(b) {
+  const legs = b.selecoes || [];
+  const sts = legs.map(l => l.status || 'aberta');
+  if (!legs.length) return { status: 'aberta', retorno: null };
+  if (sts.includes('perdeu')) return { status: 'perdeu', retorno: 0 };
+  if (sts.includes('aberta')) return { status: 'aberta', retorno: null };
+  if (sts.every(s => s === 'void')) return { status: 'void', retorno: +Number(b.stake).toFixed(2) };
+  const oddEf = oddEfetivaBilhete(b);
+  return { status: 'ganhou', retorno: +(Number(b.stake) * oddEf).toFixed(2) };
+}
 async function liquidarRapido(id, status) {
   const b = estado.bilhetes.find(x => x.id === id);
-  const retorno = status === 'ganhou' ? +(Number(b.stake) * Number(b.odd)).toFixed(2) : 0;
-  const {error} = await sb.from('banca_bilhetes').update({status, retorno}).eq('id', id);
+  const legStatus = status === 'ganhou' ? 'ganhou' : 'perdeu';
+  const selecoes = (b.selecoes || []).map(s => ({ ...s, status: legStatus }));
+  const r = recalcularBilhete({ ...b, selecoes });
+  const { error } = await sb.from('banca_bilhetes').update({ status: r.status, retorno: r.retorno, selecoes }).eq('id', id);
   if (error) { toast('Erro'); return; }
-  toast(status === 'ganhou' ? 'Bilhete ganho ✓' : 'Bilhete perdido ✕'); carregar();
+  toast(r.status === 'ganhou' ? 'Bilhete ganho ✓' : r.status === 'perdeu' ? 'Bilhete perdido ✕' : 'Bilhete void ➖'); carregar();
+}
+async function persistirCorrecao(b, selecoes) {
+  const r = recalcularBilhete({ ...b, selecoes });
+  const { error } = await sb.from('banca_bilhetes').update({ status: r.status, retorno: r.retorno, selecoes }).eq('id', b.id);
+  if (error) { toast('Erro ao salvar'); return; }
+  const i = estado.bilhetes.findIndex(x => x.id === b.id);
+  if (i >= 0) estado.bilhetes[i] = { ...b, selecoes, status: r.status, retorno: r.retorno };
+  verDetalhe(b.id); renderTabela(); renderResumo(); renderAbertas();
+}
+async function setStatusPerna(bilheteId, idx, status) {
+  const b = estado.bilhetes.find(x => x.id === bilheteId);
+  const legs = (b.selecoes || []).map(s => ({ ...s }));
+  legs[idx].status = status;
+  if ((status === 'ganhou' || status === 'perdeu' || status === 'void') && !legs[idx].detalhe) {
+    abrirEditorPerna(bilheteId, idx, status); // pede o resultado da perna (placar + conta da linha)
+    return;
+  }
+  await persistirCorrecao(b, legs);
+}
+let pernaEdit = { bilheteId: null, idx: -1, status: 'aberta' };
+function abrirEditorPerna(bilheteId, idx, statusForcado) {
+  const b = estado.bilhetes.find(x => x.id === bilheteId);
+  const leg = idx >= 0 ? (b.selecoes || [])[idx] || {} : {};
+  pernaEdit = { bilheteId, idx, status: statusForcado || leg.status || 'aberta' };
+  document.getElementById('pEvento').value = leg.evento || '';
+  document.getElementById('pPalpite').value = leg.palpite || '';
+  document.getElementById('pOdd').value = leg.odd || '';
+  document.getElementById('pDetalhe').value = leg.detalhe || '';
+  document.getElementById('tituloModalPerna').textContent = idx >= 0 ? 'Editar perna' : 'Nova perna';
+  pintarStatusPerna();
+  abrirModal('modalPerna');
+}
+function pintarStatusPerna() {
+  const mapa = { ganhou: 'btnPernaGanhou', perdeu: 'btnPernaPerdeu', void: 'btnPernaVoid', aberta: 'btnPernaAberta' };
+  Object.entries(mapa).forEach(([st, id]) => {
+    const el = document.getElementById(id);
+    el.className = 'flex-1 rounded-lg py-2 text-lg border ' + (pernaEdit.status === st ? 'bg-violet-700 text-white border-violet-700' : 'bg-white border-slate-200');
+  });
+}
+function setStatusEditorPerna(st) { pernaEdit.status = st; pintarStatusPerna(); }
+async function salvarPerna() {
+  const { bilheteId, idx, status } = pernaEdit;
+  const b = estado.bilhetes.find(x => x.id === bilheteId);
+  const legs = (b.selecoes || []).map(s => ({ ...s }));
+  const leg = {
+    evento: document.getElementById('pEvento').value.trim(),
+    palpite: document.getElementById('pPalpite').value.trim(),
+    odd: Number(document.getElementById('pOdd').value) || null,
+    status,
+    detalhe: document.getElementById('pDetalhe').value.trim() || null
+  };
+  if (!leg.evento || !leg.palpite) { toast('Preencha jogo e palpite'); return; }
+  if (idx >= 0) legs[idx] = leg; else legs.push(leg);
+  fecharModal('modalPerna');
+  await persistirCorrecao(b, legs);
+  toast('Perna salva ✓');
+}
+async function excluirPerna(bilheteId, idx) {
+  if (!confirm('Remover esta perna?')) return;
+  const b = estado.bilhetes.find(x => x.id === bilheteId);
+  const legs = (b.selecoes || []).filter((_, i) => i !== idx);
+  await persistirCorrecao(b, legs);
+  toast('Perna removida');
 }
 function verDetalhe(id) {
   const b = estado.bilhetes.find(x => x.id === id);
   const badgeLeg = st => st === 'ganhou' ? '🟢' : st === 'perdeu' ? '🔴' : st === 'void' ? '➖' : st ? '⏳' : '';
-  const sels = (b.selecoes || []).map(s => `<div class="py-1.5 border-b last:border-0"><div class="flex items-start gap-2">${s.status ? `<span class="text-sm leading-none mt-0.5">${badgeLeg(s.status)}</span>` : ''}<div class="flex-1"><div class="font-semibold text-sm">${s.evento}</div><div class="text-xs text-slate-500">→ ${s.palpite}</div>${s.detalhe ? `<div class="text-xs mt-1 text-slate-700 font-medium">📊 ${s.detalhe}</div>` : ''}</div>${s.odd ? `<div class="font-bold text-violet-700 text-xs whitespace-nowrap">@${s.odd}</div>` : ''}</div></div>`).join('');
+  const sels = (b.selecoes || []).map((s, i) => `
+    <div class="border border-slate-200 rounded-lg p-2 mb-2 bg-white">
+      <div class="flex items-start gap-2">
+        ${s.status ? `<span class="text-sm leading-none mt-0.5">${badgeLeg(s.status)}</span>` : ''}
+        <div class="flex-1">
+          <div class="font-semibold text-sm">${s.evento || ''}</div>
+          <div class="text-xs text-slate-500">→ ${s.palpite || ''}</div>
+          ${s.detalhe ? `<div class="text-xs mt-1 text-slate-700 font-medium">📊 ${s.detalhe}</div>` : ''}
+        </div>
+        ${s.odd ? `<div class="font-bold text-violet-700 text-xs whitespace-nowrap">@${s.odd}</div>` : ''}
+      </div>
+      <div class="flex gap-1 mt-2 no-print">
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'ganhou')" title="Ganhou" class="flex-1 rounded-md py-1 text-sm border ${s.status === 'ganhou' ? 'bg-green-600 text-white border-green-600' : 'bg-white border-slate-200'}">🟢</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'perdeu')" title="Perdeu" class="flex-1 rounded-md py-1 text-sm border ${s.status === 'perdeu' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-slate-200'}">🔴</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'void')" title="Void" class="flex-1 rounded-md py-1 text-sm border ${s.status === 'void' ? 'bg-slate-600 text-white border-slate-600' : 'bg-white border-slate-200'}">➖</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'aberta')" title="Em aberto" class="flex-1 rounded-md py-1 text-sm border ${!s.status || s.status === 'aberta' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white border-slate-200'}">⏳</button>
+        <button onclick="abrirEditorPerna('${b.id}', ${i})" title="Editar" class="flex-1 rounded-md py-1 text-sm bg-white border border-slate-200">✎</button>
+        <button onclick="excluirPerna('${b.id}', ${i})" title="Remover" class="flex-1 rounded-md py-1 text-sm bg-white border border-slate-200">🗑</button>
+      </div>
+    </div>`).join('');
+  const painelSelecoes = `
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-[11px] font-bold uppercase text-slate-400">Seleções · correção por perna</div>
+      <button onclick="abrirEditorPerna('${b.id}', -1)" class="text-xs text-violet-700 font-bold no-print">➕ perna</button>
+    </div>
+    ${sels || '<div class="text-xs text-slate-400 mb-2">Nenhuma seleção.</div>'}`;
   document.getElementById('detalheConteudo').innerHTML = `
     <div class="flex items-center justify-between mb-3"><div class="font-black">#${b.referencia}</div>${badgeStatus(b.status)}</div>
     ${b.foto_url ? `<div class="text-center mb-3">
       <img src="${b.foto_url}" alt="Foto do bilhete" class="max-h-64 w-auto mx-auto rounded-lg shadow cursor-zoom-in" onclick="window.open('${b.foto_url}','_blank')">
       <div class="text-[11px] text-slate-400 mt-1">clique para ampliar · <button onclick="fecharModal('modalDetalhe');abrirModalBilhete('${b.id}')" class="text-violet-700 font-bold">🔄 ler foto novamente</button></div>
     </div>` : ''}
-    <div class="mb-3">${sels}</div>
+    <div class="mb-3">${painelSelecoes}</div>
     <div class="grid grid-cols-3 gap-2 text-center text-sm">
       <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Stake</div><div class="font-black">R$ ${Number(b.stake).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div></div>
       <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Odd</div><div class="font-black text-ouro">${fmtOdd(b.odd)}</div></div>
