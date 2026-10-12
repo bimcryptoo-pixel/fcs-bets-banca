@@ -344,14 +344,15 @@ function tipoBilhete(n) { return n <= 1 ? 'Simples' : n === 2 ? 'Dupla' : n === 
 /* ================= DADOS ================= */
 async function carregar() {
   const [rc, rb] = await Promise.all([
-    sb.from('banca_clientes').select('*').eq('ativo', true).order('nome'),
+    sb.from('banca_clientes').select('*').order('nome'),
     sb.from('banca_bilhetes').select('*').order('data', {ascending: false}).limit(2000)
   ]);
   if (rc.error) { toast('Erro ao carregar clientes'); return; }
   if (rb.error) { toast('Erro ao carregar bilhetes'); return; }
   estado.clientes = rc.data || [];
   estado.bilhetes = rb.data || [];
-  if (!estado.clienteId && estado.clientes.length) estado.clienteId = estado.clientes[0].id;
+  const ativos = estado.clientes.filter(c => c.ativo !== false);
+  if ((!estado.clienteId || !ativos.some(c => c.id === estado.clienteId)) && ativos.length) estado.clienteId = ativos[0].id;
   renderTudo();
   document.getElementById('atualizadoEm').textContent = 'Atualizado em ' + new Intl.DateTimeFormat('pt-BR', {timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'}).format(new Date());
 }
@@ -377,7 +378,7 @@ function renderTudo() {
 }
 function renderHeader() {
   const sel = document.getElementById('selCliente');
-  sel.innerHTML = estado.clientes.map(c => `<option value="${c.id}" ${c.id === estado.clienteId ? 'selected' : ''}>${c.nome}</option>`).join('');
+  sel.innerHTML = estado.clientes.filter(c => c.ativo !== false).map(c => `<option value="${c.id}" ${c.id === estado.clienteId ? 'selected' : ''}>${c.nome}</option>`).join('');
   sel.onchange = e => { estado.clienteId = e.target.value; renderTudo(); };
   const c = clienteAtual();
   document.getElementById('codigoCliente').textContent = c ? 'Código: ' + c.codigo : '';
@@ -730,6 +731,23 @@ async function salvarCliente() {
   }
 }
 
+async function alternarAtivoCliente(id, ativo) {
+  const { error } = await sb.from('banca_clientes').update({ ativo }).eq('id', id);
+  if (error) { toast('Erro ao atualizar'); return; }
+  toast(ativo ? 'Cliente reativado ✓' : 'Cliente inativado ⏸');
+  carregar();
+}
+async function excluirCliente(id) {
+  const c = estado.clientes.find(x => x.id === id);
+  const n = estado.bilhetes.filter(b => b.cliente_id === id).length;
+  if (n > 0) { toast(`⛔ ${c.nome} tem ${n} bilhete(s) — inative em vez de excluir`); return; }
+  if (!confirm(`Excluir o cliente ${c.nome} (${c.codigo})?`)) return;
+  const { error } = await sb.from('banca_clientes').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir'); return; }
+  if (estado.clienteId === id) estado.clienteId = null;
+  toast('Cliente excluído'); carregar();
+}
+
 /* ================= ABAS ================= */
 function trocarAba(qual) {
   ['visao', 'fechamento', 'clientes'].forEach(a => document.getElementById('aba' + a[0].toUpperCase() + a.slice(1)).classList.toggle('hidden', a !== qual));
@@ -746,14 +764,20 @@ function renderClientes() {
   document.getElementById('listaClientes').innerHTML = estado.clientes.map(c => {
     const bs = estado.bilhetes.filter(b => b.cliente_id === c.id);
     const abertas = bs.filter(b => b.status === 'aberta').length;
-    return `<div class="border rounded-xl p-4">
-      <div class="flex items-start justify-between">
-        <div class="font-bold">${c.nome}</div>
-        <button onclick="abrirModalCliente('${c.id}')" class="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1">✎ Editar</button>
+    const inativo = c.ativo === false;
+    const acoes = inativo
+      ? `<button onclick="alternarAtivoCliente('${c.id}', true)" class="text-xs font-bold text-green-700 border border-green-200 rounded-lg px-3 py-1">↩ Reativar</button>
+         <button onclick="excluirCliente('${c.id}')" class="text-xs font-bold text-red-600 border border-red-200 rounded-lg px-3 py-1">🗑 Excluir</button>`
+      : `<button onclick="abrirModalCliente('${c.id}')" class="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1">✎ Editar</button>
+         <button onclick="alternarAtivoCliente('${c.id}', false)" class="text-xs font-bold text-amber-700 border border-amber-200 rounded-lg px-3 py-1">⏸ Inativar</button>`;
+    return `<div class="border rounded-xl p-4 ${inativo ? 'opacity-70 bg-slate-50' : ''}">
+      <div class="flex items-start justify-between gap-2">
+        <div class="font-bold">${c.nome} ${inativo ? '<span class="text-[10px] font-bold uppercase bg-slate-200 text-slate-500 rounded px-2 py-0.5 ml-1">inativo</span>' : ''}</div>
+        <div class="flex gap-1 no-print">${acoes}</div>
       </div>
       <div class="text-xs text-slate-400 mb-2">Código: ${c.codigo} · desconto padrão ${c.desconto_padrao}%</div>
       <div class="text-xs text-slate-500">${bs.length} bilhetes · ${abertas} em aberto</div>
-      <button onclick="estado.clienteId='${c.id}';trocarAba('visao');renderTudo()" class="mt-2 text-xs font-bold text-blue-700">Ver relatório →</button>
+      ${inativo ? '' : `<button onclick="estado.clienteId='${c.id}';trocarAba('visao');renderTudo()" class="mt-2 text-xs font-bold text-blue-700">Ver relatório →</button>`}
     </div>`;
   }).join('') || '<div class="text-sm text-slate-400">Nenhum cliente. Crie o primeiro acima.</div>';
 }
