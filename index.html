@@ -260,10 +260,10 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
     <input id="pOdd" type="number" step="0.01" min="1" class="w-full border rounded-lg px-3 py-2 mb-3 text-sm" placeholder="1.90">
     <label class="block text-xs font-bold text-slate-500 mb-1">Resultado da perna</label>
     <div class="flex gap-2 mb-3">
-      <button id="btnPernaGanhou" onclick="setStatusEditorPerna('ganhou')" class="flex-1 rounded-lg py-2 text-lg border">🟢</button>
-      <button id="btnPernaPerdeu" onclick="setStatusEditorPerna('perdeu')" class="flex-1 rounded-lg py-2 text-lg border">🔴</button>
-      <button id="btnPernaVoid" onclick="setStatusEditorPerna('void')" class="flex-1 rounded-lg py-2 text-lg border">➖</button>
-      <button id="btnPernaAberta" onclick="setStatusEditorPerna('aberta')" class="flex-1 rounded-lg py-2 text-lg border">⏳</button>
+      <button id="btnPernaGanhou" onclick="setStatusEditorPerna('ganhou')" class="flex-1 rounded-lg py-1.5 text-sm border">🟢</button>
+      <button id="btnPernaPerdeu" onclick="setStatusEditorPerna('perdeu')" class="flex-1 rounded-lg py-1.5 text-sm border">🔴</button>
+      <button id="btnPernaVoid" onclick="setStatusEditorPerna('void')" class="flex-1 rounded-lg py-1.5 text-sm border">➖</button>
+      <button id="btnPernaAberta" onclick="setStatusEditorPerna('aberta')" class="flex-1 rounded-lg py-1.5 text-sm border">⏳</button>
     </div>
     <label class="block text-xs font-bold text-slate-500 mb-1">Placar / conta da linha</label>
     <textarea id="pDetalhe" rows="2" class="w-full border rounded-lg px-3 py-2 mb-4 text-sm" placeholder="Ex: Jets 17 x 12 Browns — total 29, abaixo de 39.5"></textarea>
@@ -618,7 +618,7 @@ function pintarStatusPerna() {
   const mapa = { ganhou: 'btnPernaGanhou', perdeu: 'btnPernaPerdeu', void: 'btnPernaVoid', aberta: 'btnPernaAberta' };
   Object.entries(mapa).forEach(([st, id]) => {
     const el = document.getElementById(id);
-    el.className = 'flex-1 rounded-lg py-2 text-lg border ' + (pernaEdit.status === st ? 'bg-violet-700 text-white border-violet-700' : 'bg-white border-slate-200');
+    el.className = 'flex-1 rounded-lg py-1.5 text-sm border ' + (pernaEdit.status === st ? 'bg-violet-700 text-white border-violet-700' : 'bg-white border-slate-200');
   });
 }
 function setStatusEditorPerna(st) { pernaEdit.status = st; pintarStatusPerna(); }
@@ -652,7 +652,7 @@ function verDetalhe(id) {
   const sels = (b.selecoes || []).map((s, i) => `
     <div class="border border-slate-200 rounded-lg p-2 mb-2 bg-white">
       <div class="flex items-start gap-2">
-        ${s.status ? `<span class="text-sm leading-none mt-0.5">${badgeLeg(s.status)}</span>` : ''}
+        ${s.status ? `<span class="text-xs leading-none mt-0.5">${badgeLeg(s.status)}</span>` : ''}
         <div class="flex-1">
           <div class="font-semibold text-sm">${s.evento || ''}</div>
           <div class="text-xs text-slate-500">→ ${s.palpite || ''}</div>
@@ -661,12 +661,12 @@ function verDetalhe(id) {
         ${s.odd ? `<div class="font-bold text-violet-700 text-xs whitespace-nowrap">@${s.odd}</div>` : ''}
       </div>
       <div class="flex gap-1 mt-2 no-print">
-        <button onclick="setStatusPerna('${b.id}', ${i}, 'ganhou')" title="Ganhou" class="flex-1 rounded-md py-1 text-sm border ${s.status === 'ganhou' ? 'bg-green-600 text-white border-green-600' : 'bg-white border-slate-200'}">🟢</button>
-        <button onclick="setStatusPerna('${b.id}', ${i}, 'perdeu')" title="Perdeu" class="flex-1 rounded-md py-1 text-sm border ${s.status === 'perdeu' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-slate-200'}">🔴</button>
-        <button onclick="setStatusPerna('${b.id}', ${i}, 'void')" title="Void" class="flex-1 rounded-md py-1 text-sm border ${s.status === 'void' ? 'bg-slate-600 text-white border-slate-600' : 'bg-white border-slate-200'}">➖</button>
-        <button onclick="setStatusPerna('${b.id}', ${i}, 'aberta')" title="Em aberto" class="flex-1 rounded-md py-1 text-sm border ${!s.status || s.status === 'aberta' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white border-slate-200'}">⏳</button>
-        <button onclick="abrirEditorPerna('${b.id}', ${i})" title="Editar" class="flex-1 rounded-md py-1 text-sm bg-white border border-slate-200">✎</button>
-        <button onclick="excluirPerna('${b.id}', ${i})" title="Remover" class="flex-1 rounded-md py-1 text-sm bg-white border border-slate-200">🗑</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'ganhou')" title="Ganhou" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'ganhou' ? 'bg-green-600 text-white border-green-600' : 'bg-white border-slate-200'}">🟢</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'perdeu')" title="Perdeu" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'perdeu' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-slate-200'}">🔴</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'void')" title="Void" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'void' ? 'bg-slate-600 text-white border-slate-600' : 'bg-white border-slate-200'}">➖</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'aberta')" title="Em aberto" class="flex-1 rounded-md py-0.5 text-xs border ${!s.status || s.status === 'aberta' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white border-slate-200'}">⏳</button>
+        <button onclick="abrirEditorPerna('${b.id}', ${i})" title="Editar" class="flex-1 rounded-md py-0.5 text-xs bg-white border border-slate-200">✎</button>
+        <button onclick="excluirPerna('${b.id}', ${i})" title="Remover" class="flex-1 rounded-md py-0.5 text-xs bg-white border border-slate-200">🗑</button>
       </div>
     </div>`).join('');
   const painelSelecoes = `
