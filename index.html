@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FCS Bets — Banca</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+if (window.tailwind) tailwind.config = { theme: { extend: {
+  colors: { ouro: '#c9a227', marinho: '#0b0e1a', fundo: '#eef0f4' },
+  fontFamily: { sans: ['Inter','system-ui','sans-serif'] }
+}}}};
+</script>
+<style>
+  body { background:#eef0f4; font-family:'Inter',system-ui,sans-serif; }
+  .card { background:#fff; border-radius:1rem; box-shadow:0 1px 3px rgba(16,24,40,.08); }
+  .tab-ativo { background:#0b0e1a; color:#fff; }
+  .filtro-ativo { background:#0b0e1a; color:#fff; border-color:#0b0e1a; }
+  .badge-ganhou { background:#dcfce7; color:#15803d; }
+  .badge-perdeu { background:#fee2e2; color:#b91c1c; }
+  .badge-aberta { background:#dbeafe; color:#1d4ed8; }
+  .badge-void { background:#f3f4f6; color:#6b7280; }
+  .linha-bilhete { cursor:pointer; }
+  .linha-bilhete:hover { background:#f8fafc; }
+  select, input, textarea { outline:none; }
+  @media print {
+    body * { visibility:hidden; }
+    #area-impressao, #area-impressao * { visibility:visible; }
+    #area-impressao { position:absolute; left:0; top:0; width:100%; }
+    .no-print { display:none !important; }
+  }
+</style>
+</head>
+<body class="text-slate-800">
+
+<!-- ============ HEADER ============ -->
+<header class="bg-marinho text-white sticky top-0 z-40 no-print">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl font-black tracking-tight"><span class="text-blue-500">FCS</span> <span class="text-yellow-400">BETS</span></span>
+      <span class="text-[10px] text-slate-400 uppercase tracking-widest hidden sm:inline">Banca</span>
+    </div>
+    <div class="flex items-center gap-2 ml-auto flex-wrap">
+      <select id="selCliente" class="bg-slate-800 text-white text-sm rounded-lg px-3 py-2 border border-slate-700"></select>
+      <span id="codigoCliente" class="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-300"></span>
+      <button onclick="abrirModalBilhete()" class="bg-ouro hover:brightness-110 text-marinho font-bold text-sm rounded-lg px-4 py-2">＋ Novo bilhete</button>
+      <span id="atualizadoEm" class="text-[11px] text-slate-400 w-full sm:w-auto text-right"></span>
+    </div>
+  </div>
+  <nav class="max-w-6xl mx-auto px-4 pb-3 flex gap-2 text-sm">
+    <button id="tabVisao" onclick="trocarAba('visao')" class="px-4 py-1.5 rounded-full bg-white text-marinho font-semibold">Visão geral</button>
+    <button id="tabFecha" onclick="trocarAba('fechamento')" class="px-4 py-1.5 rounded-full bg-slate-800 text-slate-300 font-semibold">Fechamento semanal</button>
+    <button id="tabClientes" onclick="trocarAba('clientes')" class="px-4 py-1.5 rounded-full bg-slate-800 text-slate-300 font-semibold">Clientes</button>
+  </nav>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6">
+
+<!-- ============ ABA: VISÃO GERAL ============ -->
+<section id="abaVisao">
+  <!-- Resultado da semana -->
+  <div class="card p-5 md:p-6 mb-4">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Resultado da <span id="lblSemana">semana anterior</span> <span id="lblPeriodoSemana" class="ml-2 bg-slate-100 rounded-full px-2 py-0.5 normal-case font-semibold"></span></div>
+      <span id="badgeResultado" class="text-xs font-bold px-2.5 py-1 rounded-full"></span>
+    </div>
+    <div id="valorResultado" class="text-4xl md:text-5xl font-black mt-2"></div>
+    <div id="detalheResultado" class="text-xs text-slate-500 mt-1"></div>
+    <div id="contagemResultado" class="flex gap-2 mt-3 text-xs">
+      <span id="qtdLiquidadas" class="bg-slate-100 rounded-full px-2.5 py-1 font-semibold"></span>
+      <span id="qtdAbertas" class="bg-slate-100 rounded-full px-2.5 py-1 font-semibold"></span>
+    </div>
+  </div>
+
+  <!-- 4 cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+    <div class="card p-4">
+      <div class="text-[11px] font-bold text-slate-500 uppercase">Apostas na semana</div>
+      <div id="stQtd" class="text-2xl font-black text-ouro mt-1">0</div>
+      <div class="text-[11px] text-slate-400">bilhetes registrados</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[11px] font-bold text-slate-500 uppercase">Total apostado</div>
+      <div id="stApostado" class="text-2xl font-black text-blue-700 mt-1">R$ 0,00</div>
+      <div class="text-[11px] text-slate-400">soma das apostas liquidadas</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[11px] font-bold text-slate-500 uppercase">Retornos recebidos</div>
+      <div id="stRetornos" class="text-2xl font-black text-green-700 mt-1">R$ 0,00</div>
+      <div class="text-[11px] text-slate-400">das apostas ganhas</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[11px] font-bold text-slate-500 uppercase">Resultado</div>
+      <div id="stResultado" class="text-2xl font-black mt-1">R$ 0,00</div>
+      <div id="stDesconto" class="text-[11px] text-slate-400"></div>
+    </div>
+  </div>
+
+  <!-- Em aberto -->
+  <div class="card p-4 mb-6 flex items-center justify-between">
+    <div>
+      <div class="text-[11px] font-bold text-slate-500 uppercase">Apostas em aberto</div>
+      <div id="vlAberto" class="text-2xl font-black text-blue-700">R$ 0,00</div>
+    </div>
+    <div id="txtAberto" class="text-xs text-slate-400"></div>
+  </div>
+
+  <!-- Bilhetes -->
+  <div class="card p-4 md:p-5">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+      <div class="font-bold">Meus Bilhetes <span id="totalBilhetes" class="text-xs font-semibold text-slate-400"></span></div>
+      <div class="flex gap-1 text-xs">
+        <button onclick="setCanal('todas')" data-canal="todas" class="filtro-canal px-3 py-1.5 rounded-full border font-semibold">Todas</button>
+        <button onclick="setCanal('print')" data-canal="print" class="filtro-canal px-3 py-1.5 rounded-full border font-semibold">Via Print</button>
+        <button onclick="setCanal('site')" data-canal="site" class="filtro-canal px-3 py-1.5 rounded-full border font-semibold">Via Site</button>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap mb-3">
+      <span class="text-[11px] font-bold text-slate-400 uppercase">Período</span>
+      <div class="flex gap-1 text-xs">
+        <button onclick="setPeriodo('hoje')" data-periodo="hoje" class="filtro-periodo px-3 py-1.5 rounded-full border font-semibold">Hoje</button>
+        <button onclick="setPeriodo('semana')" data-periodo="semana" class="filtro-periodo px-3 py-1.5 rounded-full border font-semibold">Semana</button>
+        <button onclick="setPeriodo('anterior')" data-periodo="anterior" class="filtro-periodo px-3 py-1.5 rounded-full border font-semibold">Semana Anterior</button>
+      </div>
+      <div class="flex gap-1 text-xs ml-auto">
+        <button onclick="setStatus('todas')" data-status="todas" class="filtro-status px-3 py-1.5 rounded-full border font-semibold">Todas</button>
+        <button onclick="setStatus('aberta')" data-status="aberta" class="filtro-status px-3 py-1.5 rounded-full border font-semibold">● Abertas</button>
+        <button onclick="setStatus('ganhou')" data-status="ganhou" class="filtro-status px-3 py-1.5 rounded-full border font-semibold">✓ Ganhas</button>
+        <button onclick="setStatus('perdeu')" data-status="perdeu" class="filtro-status px-3 py-1.5 rounded-full border font-semibold">✕ Perdidas</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr class="text-[11px] uppercase text-slate-400 border-b">
+        <th class="text-left py-2 pr-2">Referência</th><th class="text-left py-2 pr-2">Seleções</th>
+        <th class="text-right py-2 pr-2">Stake</th><th class="text-right py-2 pr-2">Odds</th>
+        <th class="text-right py-2 pr-2">Retorno</th><th class="text-center py-2 pr-2">Status</th>
+        <th class="text-right py-2">Data</th><th class="no-print"></th>
+      </tr></thead>
+      <tbody id="corpoTabela"></tbody>
+    </table>
+    </div>
+    <div id="semBilhetes" class="text-center text-slate-400 text-sm py-8 hidden">Nenhum bilhete neste filtro.</div>
+  </div>
+</section>
+
+<!-- ============ ABA: FECHAMENTO ============ -->
+<section id="abaFechamento" class="hidden">
+  <div class="card p-5 md:p-6 mb-4">
+    <div class="font-bold text-lg mb-4">Fechamento semanal</div>
+    <div class="grid sm:grid-cols-3 gap-3 mb-4">
+      <div>
+        <label class="text-xs font-bold text-slate-500 uppercase">Semana</label>
+        <select id="fechaSemana" onchange="renderFechamento()" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white"></select>
+      </div>
+      <div>
+        <label class="text-xs font-bold text-slate-500 uppercase">Desconto da banca</label>
+        <select id="fechaDesconto" onchange="renderFechamento()" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="10">10%</option>
+          <option value="5">5%</option>
+          <option value="2.5">2,5%</option>
+          <option value="0">Sem desconto</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button onclick="gerarPDF()" class="w-full bg-marinho text-white font-bold rounded-lg px-4 py-2 text-sm">🖨️ Gerar PDF p/ WhatsApp</button>
+      </div>
+    </div>
+    <div id="resumoFechamento"></div>
+  </div>
+  <div class="text-xs text-slate-400">O desconto é aplicado sobre o prejuízo do cliente na semana (quando o resultado é negativo). Se a semana for positiva, não há desconto.</div>
+</section>
+
+<!-- ============ ABA: CLIENTES ============ -->
+<section id="abaClientes" class="hidden">
+  <div class="card p-5 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div class="font-bold text-lg">Clientes</div>
+      <button onclick="abrirModalCliente()" class="bg-ouro text-marinho font-bold text-sm rounded-lg px-4 py-2">＋ Novo cliente</button>
+    </div>
+    <div id="listaClientes" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ ÁREA DE IMPRESSÃO (PDF) ============ -->
+<div id="area-impressao" class="hidden"></div>
+
+<!-- ============ MODAL: BILHETE ============ -->
+<div id="modalBilhete" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
+    <div class="font-bold text-lg mb-4" id="tituloModalBilhete">Novo bilhete</div>
+    <input type="hidden" id="bilheteId">
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div><label class="text-xs font-bold text-slate-500 uppercase">Referência</label>
+        <input id="fReferencia" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm" placeholder="#A1B2C3"></div>
+      <div><label class="text-xs font-bold text-slate-500 uppercase">Canal</label>
+        <select id="fCanal" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white"><option value="print">Via Print</option><option value="site">Via Site</option></select></div>
+      <div><label class="text-xs font-bold text-slate-500 uppercase">Data</label>
+        <input id="fData" type="datetime-local" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm"></div>
+      <div><label class="text-xs font-bold text-slate-500 uppercase">Status</label>
+        <select id="fStatus" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white"><option value="aberta">Aberta</option><option value="ganhou">Ganhou</option><option value="perdeu">Perdeu</option><option value="void">Void</option></select></div>
+      <div><label class="text-xs font-bold text-slate-500 uppercase">Stake (R$)</label>
+        <input id="fStake" type="number" step="0.01" min="0" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm" placeholder="4000"></div>
+      <div><label class="text-xs font-bold text-slate-500 uppercase">Odd</label>
+        <input id="fOdd" type="number" step="0.001" min="1" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm" placeholder="7.915"></div>
+    </div>
+    <label class="text-xs font-bold text-slate-500 uppercase">Seleções</label>
+    <div id="listaSelecoes" class="mt-1 mb-2"></div>
+    <button onclick="addSelecao()" class="text-xs font-bold text-blue-700 mb-3">＋ Adicionar seleção</button>
+    <div class="flex gap-2">
+      <button onclick="fecharModal('modalBilhete')" class="flex-1 border rounded-lg py-2 text-sm font-semibold">Cancelar</button>
+      <button onclick="salvarBilhete()" class="flex-1 bg-marinho text-white rounded-lg py-2 text-sm font-bold">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: CLIENTE ============ -->
+<div id="modalCliente" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-sm p-5">
+    <div class="font-bold text-lg mb-4">Novo cliente</div>
+    <label class="text-xs font-bold text-slate-500 uppercase">Nome</label>
+    <input id="cNome" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm mb-3" placeholder="Nome do cliente">
+    <label class="text-xs font-bold text-slate-500 uppercase">Desconto padrão</label>
+    <select id="cDesconto" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white mb-4">
+      <option value="10">10%</option><option value="5">5%</option><option value="2.5">2,5%</option><option value="0">Sem desconto</option>
+    </select>
+    <div class="flex gap-2">
+      <button onclick="fecharModal('modalCliente')" class="flex-1 border rounded-lg py-2 text-sm font-semibold">Cancelar</button>
+      <button onclick="salvarCliente()" class="flex-1 bg-marinho text-white rounded-lg py-2 text-sm font-bold">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: DETALHE ============ -->
+<div id="modalDetalhe" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-md p-5">
+    <div id="detalheConteudo"></div>
+    <button onclick="fecharModal('modalDetalhe')" class="w-full mt-4 border rounded-lg py-2 text-sm font-semibold">Fechar</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-marinho text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-lg z-50 hidden no-print"></div>
+
+<script>
+/* ================= CONFIG ================= */
+const SUPABASE_URL = 'https://uxwuxlkvxubbknaffkca.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ALboDYr5YVBcsso2qH5mig_HlLFPfle';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const estado = { clientes: [], bilhetes: [], clienteId: null, canal: 'todas', periodo: 'anterior', status: 'todas' };
+
+/* ================= HELPERS ================= */
+const BRL = v => (v < 0 ? '-' : '') + 'R$ ' + Math.abs(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtOdd = v => Number(v).toLocaleString('pt-BR', {maximumFractionDigits: 3});
+function spHoje() {
+  return new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
+}
+function spData(iso) {
+  return new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(iso));
+}
+function spDataHora(iso) {
+  const d = new Date(iso);
+  const data = new Intl.DateTimeFormat('pt-BR', {timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit'}).format(d);
+  const hora = new Intl.DateTimeFormat('pt-BR', {timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'}).format(d);
+  return data + ', ' + hora;
+}
+function segundaDe(dataStr, desloc = 0) { // dataStr YYYY-MM-DD -> segunda da semana (+desloc semanas)
+  const [y, m, d] = dataStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = (dt.getUTCDay() + 6) % 7; // 0 = segunda
+  dt.setUTCDate(dt.getUTCDate() - dow + desloc * 7);
+  return dt.toISOString().slice(0, 10);
+}
+function domingoDe(segundaStr) {
+  const [y, m, d] = segundaStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 6);
+  return dt.toISOString().slice(0, 10);
+}
+function fmtPeriodo(a, b) {
+  const f = s => s.slice(8, 10) + '/' + s.slice(5, 7);
+  return f(a) + ' a ' + f(b);
+}
+function intervaloPeriodo() {
+  const hoje = spHoje();
+  if (estado.periodo === 'hoje') return {ini: hoje, fim: hoje, rotulo: 'hoje'};
+  if (estado.periodo === 'semana') { const s = segundaDe(hoje); return {ini: s, fim: domingoDe(s), rotulo: 'semana'}; }
+  const s = segundaDe(hoje, -1); return {ini: s, fim: domingoDe(s), rotulo: 'semana anterior'};
+}
+function noIntervalo(b, ini, fim) {
+  const d = spData(b.data);
+  return d >= ini && d <= fim;
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2500);
+}
+function badgeStatus(s) {
+  const mapa = {aberta: ['badge-aberta', '● Aberta'], ganhou: ['badge-ganhou', '✓ Ganhou'], perdeu: ['badge-perdeu', '✕ Perdeu'], void: ['badge-void', '➖ Void']};
+  const [cls, txt] = mapa[s] || mapa.aberta;
+  return `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full ${cls}">${txt}</span>`;
+}
+function tipoBilhete(n) { return n <= 1 ? 'Simples' : n === 2 ? 'Dupla' : n === 3 ? 'Tripla' : 'Múltipla'; }
+
+/* ================= DADOS ================= */
+async function carregar() {
+  const [rc, rb] = await Promise.all([
+    sb.from('banca_clientes').select('*').eq('ativo', true).order('nome'),
+    sb.from('banca_bilhetes').select('*').order('data', {ascending: false}).limit(2000)
+  ]);
+  if (rc.error) { toast('Erro ao carregar clientes'); return; }
+  if (rb.error) { toast('Erro ao carregar bilhetes'); return; }
+  estado.clientes = rc.data || [];
+  estado.bilhetes = rb.data || [];
+  if (!estado.clienteId && estado.clientes.length) estado.clienteId = estado.clientes[0].id;
+  renderTudo();
+  document.getElementById('atualizadoEm').textContent = 'Atualizado em ' + new Intl.DateTimeFormat('pt-BR', {timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'}).format(new Date());
+}
+function bilhetesDoCliente() { return estado.bilhetes.filter(b => b.cliente_id === estado.clienteId); }
+function clienteAtual() { return estado.clientes.find(c => c.id === estado.clienteId); }
+
+/* ================= CÁLCULOS ================= */
+function resumoSemana(ini, fim, descontoPct) {
+  const bs = bilhetesDoCliente().filter(b => noIntervalo(b, ini, fim));
+  const liq = bs.filter(b => b.status === 'ganhou' || b.status === 'perdeu');
+  const abertas = bs.filter(b => b.status === 'aberta');
+  const apostado = liq.reduce((s, b) => s + Number(b.stake), 0);
+  const retornos = liq.filter(b => b.status === 'ganhou').reduce((s, b) => s + Number(b.retorno || 0), 0);
+  const bruto = retornos - apostado;
+  const desconto = bruto < 0 ? Math.abs(bruto) * descontoPct / 100 : 0;
+  const liquido = bruto + desconto;
+  return {bs, liq, abertas, apostado, retornos, bruto, desconto, liquido, qtd: bs.length};
+}
+
+/* ================= RENDER: VISÃO ================= */
+function renderTudo() {
+  renderHeader(); renderVisao(); renderFechamento(); renderClientes();
+}
+function renderHeader() {
+  const sel = document.getElementById('selCliente');
+  sel.innerHTML = estado.clientes.map(c => `<option value="${c.id}" ${c.id === estado.clienteId ? 'selected' : ''}>${c.nome}</option>`).join('');
+  sel.onchange = e => { estado.clienteId = e.target.value; renderTudo(); };
+  const c = clienteAtual();
+  document.getElementById('codigoCliente').textContent = c ? 'Código: ' + c.codigo : '';
+  const fd = document.getElementById('fechaDesconto');
+  if (c && !fd.dataset.travado) { fd.value = String(c.desconto_padrao ?? 10); }
+}
+function renderVisao() {
+  const {ini, fim} = intervaloPeriodo();
+  const c = clienteAtual();
+  const pct = Number(document.getElementById('fechaDesconto').value || (c ? c.desconto_padrao : 10) || 0);
+  const r = resumoSemana(ini, fim, pct);
+
+  document.getElementById('lblSemana').textContent = estado.periodo === 'hoje' ? 'de hoje' : estado.periodo === 'semana' ? 'atual' : 'anterior';
+  document.getElementById('lblPeriodoSemana').textContent = fmtPeriodo(ini, fim);
+
+  const v = document.getElementById('valorResultado');
+  v.textContent = BRL(r.liquido);
+  v.className = 'text-4xl md:text-5xl font-black mt-2 ' + (r.liquido < 0 ? 'text-red-600' : r.liquido > 0 ? 'text-green-600' : 'text-slate-500');
+  const badge = document.getElementById('badgeResultado');
+  badge.textContent = r.liquido < 0 ? '↓ Negativo' : r.liquido > 0 ? '↑ Positivo' : 'Neutro';
+  badge.className = 'text-xs font-bold px-2.5 py-1 rounded-full ' + (r.liquido < 0 ? 'badge-perdeu' : r.liquido > 0 ? 'badge-ganhou' : 'badge-void');
+  document.getElementById('detalheResultado').textContent =
+    `Bruto ${BRL(r.bruto)}${r.desconto > 0 ? ` · desconto de ${pct}% +${BRL(r.desconto)}` : ''}`;
+  document.getElementById('qtdLiquidadas').textContent = `🏁 ${r.liq.length} liquidadas`;
+  document.getElementById('qtdAbertas').textContent = `● ${r.abertas.length} abertas`;
+
+  document.getElementById('stQtd').textContent = r.qtd;
+  document.getElementById('stApostado').textContent = BRL(r.apostado);
+  document.getElementById('stRetornos').textContent = BRL(r.retornos);
+  const stR = document.getElementById('stResultado');
+  stR.textContent = BRL(r.bruto);
+  stR.className = 'text-2xl font-black mt-1 ' + (r.bruto < 0 ? 'text-red-600' : r.bruto > 0 ? 'text-green-600' : '');
+  document.getElementById('stDesconto').textContent = r.desconto > 0 ? `desconto de ${pct}% +${BRL(r.desconto)}` : 'sem desconto aplicado';
+
+  const abertasTodas = bilhetesDoCliente().filter(b => b.status === 'aberta');
+  const vlAb = abertasTodas.reduce((s, b) => s + Number(b.stake), 0);
+  document.getElementById('vlAberto').textContent = BRL(vlAb);
+  document.getElementById('txtAberto').textContent = abertasTodas.length ? `${abertasTodas.length} aposta(s) em jogo` : 'nenhuma aposta em jogo';
+
+  renderTabela();
+}
+function bilhetesFiltrados() {
+  const {ini, fim} = intervaloPeriodo();
+  return bilhetesDoCliente().filter(b =>
+    noIntervalo(b, ini, fim) &&
+    (estado.canal === 'todas' || b.canal === estado.canal) &&
+    (estado.status === 'todas' || b.status === estado.status)
+  );
+}
+function renderTabela() {
+  const bs = bilhetesFiltrados();
+  document.getElementById('totalBilhetes').textContent = bs.length + ' registros';
+  const tb = document.getElementById('corpoTabela');
+  document.getElementById('semBilhetes').classList.toggle('hidden', bs.length > 0);
+  tb.innerHTML = bs.map(b => {
+    const sels = (b.selecoes || []);
+    const primeira = sels[0];
+    const mais = sels.length > 1 ? `<div class="text-[11px] text-blue-700 font-semibold">+${sels.length - 1} seleções</div>` : '';
+    return `<tr class="border-b linha-bilhete" onclick="verDetalhe('${b.id}')">
+      <td class="py-3 pr-2"><div class="font-bold text-xs">#${b.referencia}</div><div class="text-[11px] text-slate-400">${tipoBilhete(sels.length)} · ${sels.length} seleção(ões)</div></td>
+      <td class="py-3 pr-2">${primeira ? `<div class="font-semibold text-xs">${primeira.evento}</div><div class="text-[11px] text-slate-500">→ ${primeira.palpite}</div>${mais}` : '<span class="text-slate-300">—</span>'}</td>
+      <td class="py-3 pr-2 text-right font-bold whitespace-nowrap">R$ ${Number(b.stake).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+      <td class="py-3 pr-2 text-right font-bold text-ouro">${fmtOdd(b.odd)}</td>
+      <td class="py-3 pr-2 text-right font-bold whitespace-nowrap ${b.status === 'ganhou' ? 'text-green-700' : ''}">${b.retorno != null ? 'R$ ' + Number(b.retorno).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '<span class="text-slate-300">—</span>'}</td>
+      <td class="py-3 pr-2 text-center">${badgeStatus(b.status)}</td>
+      <td class="py-3 text-right text-xs text-slate-500 whitespace-nowrap">${spDataHora(b.data)}</td>
+      <td class="no-print text-right whitespace-nowrap">
+        ${b.status === 'aberta' ? `<button onclick="event.stopPropagation();liquidarRapido('${b.id}','ganhou')" class="text-green-700 font-bold text-xs mr-2">✓</button><button onclick="event.stopPropagation();liquidarRapido('${b.id}','perdeu')" class="text-red-600 font-bold text-xs mr-2">✕</button>` : ''}
+        <button onclick="event.stopPropagation();abrirModalBilhete('${b.id}')" class="text-blue-700 text-xs mr-2">✎</button>
+        <button onclick="event.stopPropagation();excluirBilhete('${b.id}')" class="text-slate-400 text-xs">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('.filtro-canal').forEach(x => x.classList.toggle('filtro-ativo', x.dataset.canal === estado.canal));
+  document.querySelectorAll('.filtro-periodo').forEach(x => x.classList.toggle('filtro-ativo', x.dataset.periodo === estado.periodo));
+  document.querySelectorAll('.filtro-status').forEach(x => x.classList.toggle('filtro-ativo', x.dataset.status === estado.status));
+}
+function setCanal(v) { estado.canal = v; renderTabela(); }
+function setPeriodo(v) { estado.periodo = v; renderVisao(); }
+function setStatus(v) { estado.status = v; renderTabela(); }
+
+/* ================= MODAIS ================= */
+function abrirModal(id) { const m = document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
+function fecharModal(id) { const m = document.getElementById(id); m.classList.add('hidden'); m.classList.remove('flex'); }
+function genRef() { return Math.random().toString(36).slice(2, 8).toUpperCase(); }
+
+function addSelecao(evento = '', palpite = '') {
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 mb-2 sel-row';
+  div.innerHTML = `<input class="sel-evento flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="Ex: Flamengo x Palmeiras" value="${evento.replace(/"/g, '&quot;')}">
+    <input class="sel-palpite flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="Ex: Flamengo -0.5" value="${palpite.replace(/"/g, '&quot;')}">
+    <button onclick="this.parentElement.remove()" class="text-red-500 text-sm px-1">✕</button>`;
+  document.getElementById('listaSelecoes').appendChild(div);
+}
+function lerSelecoes() {
+  return [...document.querySelectorAll('#listaSelecoes .sel-row')].map(r => ({
+    evento: r.querySelector('.sel-evento').value.trim(),
+    palpite: r.querySelector('.sel-palpite').value.trim()
+  })).filter(s => s.evento || s.palpite);
+}
+function abrirModalBilhete(id = null) {
+  document.getElementById('bilheteId').value = id || '';
+  document.getElementById('tituloModalBilhete').textContent = id ? 'Editar bilhete' : 'Novo bilhete';
+  document.getElementById('listaSelecoes').innerHTML = '';
+  const agora = new Date(); agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+  if (id) {
+    const b = estado.bilhetes.find(x => x.id === id);
+    document.getElementById('fReferencia').value = b.referencia;
+    document.getElementById('fCanal').value = b.canal;
+    const d = new Date(b.data); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    document.getElementById('fData').value = d.toISOString().slice(0, 16);
+    document.getElementById('fStatus').value = b.status;
+    document.getElementById('fStake').value = b.stake;
+    document.getElementById('fOdd').value = b.odd;
+    (b.selecoes || []).forEach(s => addSelecao(s.evento, s.palpite));
+  } else {
+    document.getElementById('fReferencia').value = genRef();
+    document.getElementById('fCanal').value = 'print';
+    document.getElementById('fData').value = agora.toISOString().slice(0, 16);
+    document.getElementById('fStatus').value = 'aberta';
+    document.getElementById('fStake').value = '';
+    document.getElementById('fOdd').value = '';
+    addSelecao();
+  }
+  abrirModal('modalBilhete');
+}
+async function salvarBilhete() {
+  const id = document.getElementById('bilheteId').value;
+  const stake = Number(document.getElementById('fStake').value);
+  const odd = Number(document.getElementById('fOdd').value);
+  const status = document.getElementById('fStatus').value;
+  const selecoes = lerSelecoes();
+  if (!stake || !odd || !selecoes.length) { toast('Preencha stake, odd e ao menos 1 seleção'); return; }
+  const payload = {
+    cliente_id: estado.clienteId,
+    referencia: document.getElementById('fReferencia').value.trim() || genRef(),
+    canal: document.getElementById('fCanal').value,
+    data: new Date(document.getElementById('fData').value).toISOString(),
+    status, stake, odd, selecoes,
+    retorno: status === 'ganhou' ? +(stake * odd).toFixed(2) : status === 'perdeu' ? 0 : null
+  };
+  let erro;
+  if (id) { const r = await sb.from('banca_bilhetes').update(payload).eq('id', id); erro = r.error; }
+  else { payload.id = 'bil-' + Date.now() + '-' + Math.floor(Math.random() * 1e4); const r = await sb.from('banca_bilhetes').insert(payload); erro = r.error; }
+  if (erro) { toast('Erro ao salvar'); return; }
+  fecharModal('modalBilhete'); toast('Bilhete salvo'); carregar();
+}
+async function excluirBilhete(id) {
+  if (!confirm('Excluir este bilhete?')) return;
+  const {error} = await sb.from('banca_bilhetes').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir'); return; }
+  toast('Bilhete excluído'); carregar();
+}
+async function liquidarRapido(id, status) {
+  const b = estado.bilhetes.find(x => x.id === id);
+  const retorno = status === 'ganhou' ? +(Number(b.stake) * Number(b.odd)).toFixed(2) : 0;
+  const {error} = await sb.from('banca_bilhetes').update({status, retorno}).eq('id', id);
+  if (error) { toast('Erro'); return; }
+  toast(status === 'ganhou' ? 'Bilhete ganho ✓' : 'Bilhete perdido ✕'); carregar();
+}
+function verDetalhe(id) {
+  const b = estado.bilhetes.find(x => x.id === id);
+  const sels = (b.selecoes || []).map(s => `<div class="py-1.5 border-b last:border-0"><div class="font-semibold text-sm">${s.evento}</div><div class="text-xs text-slate-500">→ ${s.palpite}</div></div>`).join('');
+  document.getElementById('detalheConteudo').innerHTML = `
+    <div class="flex items-center justify-between mb-3"><div class="font-black">#${b.referencia}</div>${badgeStatus(b.status)}</div>
+    <div class="mb-3">${sels}</div>
+    <div class="grid grid-cols-3 gap-2 text-center text-sm">
+      <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Stake</div><div class="font-black">R$ ${Number(b.stake).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div></div>
+      <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Odd</div><div class="font-black text-ouro">${fmtOdd(b.odd)}</div></div>
+      <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Retorno</div><div class="font-black">${b.retorno != null ? 'R$ ' + Number(b.retorno).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '—'}</div></div>
+    </div>
+    <div class="text-xs text-slate-400 mt-3">${b.canal === 'site' ? 'Via Site' : 'Via Print'} · ${spDataHora(b.data)}</div>`;
+  abrirModal('modalDetalhe');
+}
+function abrirModalCliente() { document.getElementById('cNome').value = ''; abrirModal('modalCliente'); }
+async function salvarCliente() {
+  const nome = document.getElementById('cNome').value.trim();
+  if (!nome) { toast('Informe o nome'); return; }
+  const codigo = 'CLI-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const {data, error} = await sb.from('banca_clientes').insert({id: 'cli-' + Date.now(), nome, codigo, desconto_padrao: Number(document.getElementById('cDesconto').value)}).select();
+  if (error) { toast('Erro ao salvar cliente'); return; }
+  fecharModal('modalCliente'); toast('Cliente criado: ' + codigo);
+  estado.clienteId = data[0].id; carregar();
+}
+
+/* ================= ABAS ================= */
+function trocarAba(qual) {
+  ['visao', 'fechamento', 'clientes'].forEach(a => document.getElementById('aba' + a[0].toUpperCase() + a.slice(1)).classList.toggle('hidden', a !== qual));
+  const mapa = {visao: 'tabVisao', fechamento: 'tabFecha', clientes: 'tabClientes'};
+  Object.entries(mapa).forEach(([a, id]) => {
+    const el = document.getElementById(id);
+    const on = a === qual;
+    el.className = 'px-4 py-1.5 rounded-full font-semibold ' + (on ? 'bg-white text-marinho' : 'bg-slate-800 text-slate-300');
+  });
+}
+
+/* ================= CLIENTES (lista) ================= */
+function renderClientes() {
+  document.getElementById('listaClientes').innerHTML = estado.clientes.map(c => {
+    const bs = estado.bilhetes.filter(b => b.cliente_id === c.id);
+    const abertas = bs.filter(b => b.status === 'aberta').length;
+    return `<div class="border rounded-xl p-4">
+      <div class="font-bold">${c.nome}</div>
+      <div class="text-xs text-slate-400 mb-2">Código: ${c.codigo} · desconto padrão ${c.desconto_padrao}%</div>
+      <div class="text-xs text-slate-500">${bs.length} bilhetes · ${abertas} em aberto</div>
+      <button onclick="estado.clienteId='${c.id}';trocarAba('visao');renderTudo()" class="mt-2 text-xs font-bold text-blue-700">Ver relatório →</button>
+    </div>`;
+  }).join('') || '<div class="text-sm text-slate-400">Nenhum cliente. Crie o primeiro acima.</div>';
+}
+
+/* ================= FECHAMENTO ================= */
+function ultimasSemanas(n = 8) {
+  const hoje = spHoje(); const out = [];
+  for (let i = 0; i < n; i++) { const s = segundaDe(hoje, -i); out.push({ini: s, fim: domingoDe(s)}); }
+  return out;
+}
+function renderFechamento() {
+  const sel = document.getElementById('fechaSemana');
+  if (!sel.options.length) {
+    sel.innerHTML = ultimasSemanas().map((s, i) => `<option value="${s.ini}|${s.fim}">${i === 0 ? 'Esta semana' : i === 1 ? 'Semana anterior' : fmtPeriodo(s.ini, s.fim)} · ${fmtPeriodo(s.ini, s.fim)}</option>`).join('');
+    sel.selectedIndex = 1;
+  }
+  const [ini, fim] = sel.value.split('|');
+  const pct = Number(document.getElementById('fechaDesconto').value);
+  const r = resumoSemana(ini, fim, pct);
+  const c = clienteAtual();
+  const cor = r.liquido < 0 ? 'text-red-600' : r.liquido > 0 ? 'text-green-600' : 'text-slate-500';
+  document.getElementById('resumoFechamento').innerHTML = `
+    <div class="bg-slate-50 rounded-xl p-4">
+      <div class="text-xs font-bold text-slate-500 uppercase mb-1">Cliente: ${c ? c.nome : '—'} · ${fmtPeriodo(ini, fim)}</div>
+      <div class="text-4xl font-black ${cor}">${BRL(r.liquido)}</div>
+      <div class="text-xs text-slate-500 mt-1">Bruto ${BRL(r.bruto)}${r.desconto > 0 ? ` · desconto de ${pct}% +${BRL(r.desconto)}` : ''}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-sm">
+        <div class="bg-white rounded-lg p-3"><div class="text-[10px] uppercase text-slate-400 font-bold">Bilhetes</div><div class="font-black">${r.qtd}</div></div>
+        <div class="bg-white rounded-lg p-3"><div class="text-[10px] uppercase text-slate-400 font-bold">Apostado</div><div class="font-black">${BRL(r.apostado)}</div></div>
+        <div class="bg-white rounded-lg p-3"><div class="text-[10px] uppercase text-slate-400 font-bold">Retornos</div><div class="font-black text-green-700">${BRL(r.retornos)}</div></div>
+        <div class="bg-white rounded-lg p-3"><div class="text-[10px] uppercase text-slate-400 font-bold">Liquidadas</div><div class="font-black">${r.liq.length}</div></div>
+      </div>
+    </div>`;
+}
+
+/* ================= PDF ================= */
+function gerarPDF() {
+  const [ini, fim] = document.getElementById('fechaSemana').value.split('|');
+  const pct = Number(document.getElementById('fechaDesconto').value);
+  const r = resumoSemana(ini, fim, pct);
+  const c = clienteAtual() || {nome: '—', codigo: '—'};
+  const cor = r.liquido < 0 ? '#dc2626' : r.liquido > 0 ? '#16a34a' : '#64748b';
+  const linhas = r.bs.map(b => {
+    const sels = (b.selecoes || []).map(s => `<div style="font-size:11px"><b>${s.evento}</b><br><span style="color:#64748b">→ ${s.palpite}</span></div>`).join('');
+    const st = {aberta: 'Aberta', ganhou: 'Ganhou', perdeu: 'Perdeu', void: 'Void'}[b.status];
+    const corSt = {aberta: '#1d4ed8', ganhou: '#15803d', perdeu: '#b91c1c', void: '#6b7280'}[b.status];
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:11px"><b>#${b.referencia}</b><br><span style="color:#94a3b8">${tipoBilhete((b.selecoes || []).length)}</span></td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${sels}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:12px"><b>R$ ${Number(b.stake).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</b></td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:12px"><b>${fmtOdd(b.odd)}</b></td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:12px"><b>R$ ${Number(b.retorno || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</b></td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:11px"><b style="color:${corSt}">${st}</b></td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:11px;color:#64748b">${spDataHora(b.data)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('area-impressao').innerHTML = `
+  <div style="font-family:system-ui,sans-serif;color:#1e293b;max-width:700px;margin:0 auto;padding:8px">
+    <div style="background:#0b0e1a;color:#fff;border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:20px;font-weight:900"><span style="color:#3b82f6">FCS</span> <span style="color:#facc15">BETS</span> <span style="font-size:11px;color:#94a3b8;font-weight:400">· Banca</span></div>
+      <div style="font-size:12px;color:#cbd5e1;margin-top:4px">Relatório semanal · ${c.nome} · Código ${c.codigo}</div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:#64748b">RESULTADO DA SEMANA · ${fmtPeriodo(ini, fim)}</div>
+      <div style="font-size:36px;font-weight:900;color:${cor}">${BRL(r.liquido)}</div>
+      <div style="font-size:11px;color:#64748b">Bruto ${BRL(r.bruto)}${r.desconto > 0 ? ` · desconto de ${pct}% +${BRL(r.desconto)}` : ''}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px">${r.liq.length} liquidadas · ${r.abertas.length} abertas</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+      <thead><tr style="font-size:10px;color:#94a3b8;text-transform:uppercase">
+        <th style="text-align:left;padding:8px">Ref</th><th style="text-align:left;padding:8px">Seleções</th>
+        <th style="text-align:right;padding:8px">Stake</th><th style="text-align:right;padding:8px">Odd</th>
+        <th style="text-align:right;padding:8px">Retorno</th><th style="text-align:center;padding:8px">Status</th><th style="text-align:right;padding:8px">Data</th>
+      </tr></thead><tbody>${linhas || '<tr><td colspan="7" style="padding:16px;text-align:center;color:#94a3b8;font-size:12px">Sem bilhetes na semana.</td></tr>'}</tbody>
+    </table>
+    <div style="font-size:10px;color:#94a3b8;margin-top:12px;text-align:center">FCS Bets · relatório gerado em ${spDataHora(new Date().toISOString())}</div>
+  </div>`;
+  const imp = document.getElementById('area-impressao');
+  imp.classList.remove('hidden');
+  setTimeout(() => { window.print(); setTimeout(() => imp.classList.add('hidden'), 500); }, 100);
+}
+
+/* ================= INIT ================= */
+document.addEventListener('DOMContentLoaded', carregar);
+</script>
+</body>
+</html>
