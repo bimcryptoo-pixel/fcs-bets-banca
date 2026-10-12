@@ -669,7 +669,7 @@ function verDetalhe(id) {
       </div>
       <div class="flex gap-1 mt-2 no-print">
         <button onclick="setStatusPerna('${b.id}', ${i}, 'ganhou')" title="Ganhou" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'ganhou' ? 'bg-green-600 text-white border-green-600' : 'bg-white border-slate-200'}">✅</button>
-        <button onclick="setStatusPerna('${b.id}', ${i}, 'perdeu')" title="Perdeu" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'perdeu' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-slate-200'}">❌</button>
+        <button onclick="setStatusPerna('${b.id}', ${i}, 'perdeu')" title="Perdeu" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'perdeu' ? 'bg-red-600 border-red-600' : 'bg-white border-slate-200'}">${s.status === 'perdeu' ? '<span class="brightness-0 invert inline-block">❌</span>' : '❌'}</button>
         <button onclick="setStatusPerna('${b.id}', ${i}, 'void')" title="Void" class="flex-1 rounded-md py-0.5 text-xs border ${s.status === 'void' ? 'bg-slate-600 text-white border-slate-600' : 'bg-white border-slate-200'}">🔄</button>
         <button onclick="setStatusPerna('${b.id}', ${i}, 'aberta')" title="Em aberto" class="flex-1 rounded-md py-0.5 text-xs border ${!s.status || s.status === 'aberta' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white border-slate-200'}">⏳</button>
         <button onclick="abrirEditorPerna('${b.id}', ${i})" title="Editar" class="flex-1 rounded-md py-0.5 text-xs bg-white border border-slate-200">✎</button>
