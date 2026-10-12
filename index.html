@@ -228,13 +228,12 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
 <!-- ============ MODAL: CLIENTE ============ -->
 <div id="modalCliente" class="fixed inset-0 bg-black/50 z-50 hidden overflow-y-auto p-4 no-print">
   <div class="bg-white rounded-2xl w-full max-w-sm p-5 m-auto">
-    <div class="font-bold text-lg mb-4">Novo cliente</div>
+    <div id="tituloModalCliente" class="font-bold text-lg mb-4">Novo cliente</div>
+    <input type="hidden" id="clienteId" value="">
     <label class="text-xs font-bold text-slate-500 uppercase">Nome</label>
     <input id="cNome" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm mb-3" placeholder="Nome do cliente">
-    <label class="text-xs font-bold text-slate-500 uppercase">Desconto padrão</label>
-    <select id="cDesconto" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white mb-4">
-      <option value="10">10%</option><option value="5">5%</option><option value="2.5">2,5%</option><option value="0">Sem desconto</option>
-    </select>
+    <label class="text-xs font-bold text-slate-500 uppercase">Desconto padrão (%)</label>
+    <input id="cDesconto" type="number" step="0.5" min="0" max="100" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm mb-4" placeholder="2,5">
     <div class="flex gap-2">
       <button onclick="fecharModal('modalCliente')" class="flex-1 border rounded-lg py-2 text-sm font-semibold">Cancelar</button>
       <button onclick="salvarCliente()" class="flex-1 bg-marinho text-white rounded-lg py-2 text-sm font-bold">Salvar</button>
@@ -380,7 +379,14 @@ function renderHeader() {
   const c = clienteAtual();
   document.getElementById('codigoCliente').textContent = c ? 'Código: ' + c.codigo : '';
   const fd = document.getElementById('fechaDesconto');
-  if (c && !fd.dataset.travado) { fd.value = String(c.desconto_padrao ?? 10); }
+  if (c && !fd.dataset.travado) {
+    const dv = String(c.desconto_padrao ?? 10);
+    if (![...fd.options].some(o => o.value === dv)) {
+      const op = document.createElement('option'); op.value = dv;
+      op.textContent = dv.replace('.', ',') + '%'; fd.appendChild(op);
+    }
+    fd.value = dv;
+  }
 }
 function renderVisao() {
   const {ini, fim} = intervaloPeriodo();
@@ -690,15 +696,31 @@ function verDetalhe(id) {
     </div>`;
   abrirModal('modalDetalhe');
 }
-function abrirModalCliente() { document.getElementById('cNome').value = ''; abrirModal('modalCliente'); }
+function abrirModalCliente(id = null) {
+  document.getElementById('clienteId').value = id || '';
+  const c = id ? estado.clientes.find(x => x.id === id) : null;
+  document.getElementById('tituloModalCliente').textContent = c ? 'Editar cliente' : 'Novo cliente';
+  document.getElementById('cNome').value = c ? c.nome : '';
+  document.getElementById('cDesconto').value = c ? (c.desconto_padrao ?? '') : '';
+  abrirModal('modalCliente');
+}
 async function salvarCliente() {
+  const id = document.getElementById('clienteId').value;
   const nome = document.getElementById('cNome').value.trim();
+  const desconto = Number(document.getElementById('cDesconto').value);
   if (!nome) { toast('Informe o nome'); return; }
-  const codigo = 'CLI-' + Math.random().toString(36).slice(2, 6).toUpperCase();
-  const {data, error} = await sb.from('banca_clientes').insert({id: 'cli-' + Date.now(), nome, codigo, desconto_padrao: Number(document.getElementById('cDesconto').value)}).select();
-  if (error) { toast('Erro ao salvar cliente'); return; }
-  fecharModal('modalCliente'); toast('Cliente criado: ' + codigo);
-  estado.clienteId = data[0].id; carregar();
+  if (isNaN(desconto) || desconto < 0 || desconto > 100) { toast('Desconto inválido (0 a 100)'); return; }
+  if (id) {
+    const { error } = await sb.from('banca_clientes').update({ nome, desconto_padrao: desconto }).eq('id', id);
+    if (error) { toast('Erro ao salvar'); return; }
+    fecharModal('modalCliente'); toast('Cliente atualizado ✓'); carregar();
+  } else {
+    const codigo = 'CLI-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const { data, error } = await sb.from('banca_clientes').insert({ id: 'cli-' + Date.now(), nome, codigo, desconto_padrao: desconto }).select();
+    if (error) { toast('Erro ao salvar cliente'); return; }
+    fecharModal('modalCliente'); toast('Cliente criado: ' + codigo);
+    estado.clienteId = data[0].id; carregar();
+  }
 }
 
 /* ================= ABAS ================= */
@@ -718,7 +740,10 @@ function renderClientes() {
     const bs = estado.bilhetes.filter(b => b.cliente_id === c.id);
     const abertas = bs.filter(b => b.status === 'aberta').length;
     return `<div class="border rounded-xl p-4">
-      <div class="font-bold">${c.nome}</div>
+      <div class="flex items-start justify-between">
+        <div class="font-bold">${c.nome}</div>
+        <button onclick="abrirModalCliente('${c.id}')" class="text-xs font-bold text-blue-700 border border-blue-200 rounded-lg px-3 py-1">✎ Editar</button>
+      </div>
       <div class="text-xs text-slate-400 mb-2">Código: ${c.codigo} · desconto padrão ${c.desconto_padrao}%</div>
       <div class="text-xs text-slate-500">${bs.length} bilhetes · ${abertas} em aberto</div>
       <button onclick="estado.clienteId='${c.id}';trocarAba('visao');renderTudo()" class="mt-2 text-xs font-bold text-blue-700">Ver relatório →</button>
