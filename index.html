@@ -10,7 +10,7 @@
 if (window.tailwind) tailwind.config = { theme: { extend: {
   colors: { ouro: '#c9a227', marinho: '#0b0e1a', fundo: '#eef0f4' },
   fontFamily: { sans: ['Inter','system-ui','sans-serif'] }
-}}}};
+}}};
 </script>
 <style>
   body { background:#eef0f4; font-family:'Inter',system-ui,sans-serif; }
@@ -189,8 +189,8 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
 <div id="area-impressao" class="hidden"></div>
 
 <!-- ============ MODAL: BILHETE ============ -->
-<div id="modalBilhete" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 no-print">
-  <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
+<div id="modalBilhete" class="fixed inset-0 bg-black/50 z-50 hidden overflow-y-auto p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-lg p-5 m-auto">
     <div class="font-bold text-lg mb-4" id="tituloModalBilhete">Novo bilhete</div>
     <input type="hidden" id="bilheteId">
     <div class="grid grid-cols-2 gap-3 mb-3">
@@ -218,8 +218,8 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
 </div>
 
 <!-- ============ MODAL: CLIENTE ============ -->
-<div id="modalCliente" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 no-print">
-  <div class="bg-white rounded-2xl w-full max-w-sm p-5">
+<div id="modalCliente" class="fixed inset-0 bg-black/50 z-50 hidden overflow-y-auto p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-sm p-5 m-auto">
     <div class="font-bold text-lg mb-4">Novo cliente</div>
     <label class="text-xs font-bold text-slate-500 uppercase">Nome</label>
     <input id="cNome" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm mb-3" placeholder="Nome do cliente">
@@ -235,8 +235,8 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
 </div>
 
 <!-- ============ MODAL: DETALHE ============ -->
-<div id="modalDetalhe" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 no-print">
-  <div class="bg-white rounded-2xl w-full max-w-md p-5">
+<div id="modalDetalhe" class="fixed inset-0 bg-black/50 z-50 hidden overflow-y-auto p-4 no-print">
+  <div class="bg-white rounded-2xl w-full max-w-md p-5 m-auto">
     <div id="detalheConteudo"></div>
     <button onclick="fecharModal('modalDetalhe')" class="w-full mt-4 border rounded-lg py-2 text-sm font-semibold">Fechar</button>
   </div>
@@ -514,7 +514,13 @@ function verDetalhe(id) {
       <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Odd</div><div class="font-black text-ouro">${fmtOdd(b.odd)}</div></div>
       <div class="bg-slate-50 rounded-lg p-2"><div class="text-[10px] uppercase text-slate-400 font-bold">Retorno</div><div class="font-black">${b.retorno != null ? 'R$ ' + Number(b.retorno).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '—'}</div></div>
     </div>
-    <div class="text-xs text-slate-400 mt-3">${b.canal === 'site' ? 'Via Site' : 'Via Print'} · ${spDataHora(b.data)}</div>`;
+    <div class="text-xs text-slate-400 mt-3">${b.canal === 'site' ? 'Via Site' : 'Via Print'} · ${spDataHora(b.data)}</div>
+    <div class="grid grid-cols-2 gap-2 mt-4 no-print">
+      ${b.status === 'aberta' ? `<button onclick="fecharModal('modalDetalhe');liquidarRapido('${b.id}','ganhou')" class="bg-green-600 text-white rounded-lg py-2 text-sm font-bold">✓ Ganhou</button>
+      <button onclick="fecharModal('modalDetalhe');liquidarRapido('${b.id}','perdeu')" class="bg-red-600 text-white rounded-lg py-2 text-sm font-bold">✕ Perdeu</button>` : ''}
+      <button onclick="fecharModal('modalDetalhe');abrirModalBilhete('${b.id}')" class="border border-blue-700 text-blue-700 rounded-lg py-2 text-sm font-bold">✎ Corrigir</button>
+      <button onclick="fecharModal('modalDetalhe');excluirBilhete('${b.id}')" class="border border-slate-300 text-slate-500 rounded-lg py-2 text-sm font-semibold">🗑 Excluir</button>
+    </div>`;
   abrirModal('modalDetalhe');
 }
 function abrirModalCliente() { document.getElementById('cNome').value = ''; abrirModal('modalCliente'); }
