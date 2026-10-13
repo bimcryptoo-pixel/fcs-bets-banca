@@ -244,7 +244,7 @@ if (window.tailwind) tailwind.config = { theme: { extend: {
 <!-- ============ MODAL: DETALHE ============ -->
 <div id="modalDetalhe" class="fixed inset-0 bg-black/50 z-50 hidden overflow-y-auto no-print">
   <button onclick="fecharModal('modalDetalhe')" aria-label="Fechar bilhete" class="fixed top-3 right-3 z-[60] w-11 h-11 rounded-full bg-red-600 text-white text-2xl font-bold shadow-xl active:scale-95">✕</button>
-  <div class="min-h-full flex p-4">
+  <div class="min-h-full w-full flex p-4">
     <div class="bg-white rounded-2xl w-full max-w-md p-5 m-auto">
       <div id="detalheConteudo"></div>
       <button onclick="fecharModal('modalDetalhe')" class="w-full mt-4 border rounded-lg py-2 text-sm font-semibold">✕ Fechar</button>
