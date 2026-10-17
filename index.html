@@ -285,7 +285,7 @@ const SUPABASE_URL = 'https://uxwuxlkvxubbknaffkca.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ALboDYr5YVBcsso2qH5mig_HlLFPfle';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-const estado = { clientes: [], bilhetes: [], clienteId: null, canal: 'todas', periodo: 'anterior', status: 'todas' };
+const estado = { clientes: [], bilhetes: [], clienteId: null, canal: 'todas', periodo: 'semana', status: 'todas' };
 
 /* ================= HELPERS ================= */
 const BRL = v => (v < 0 ? '-' : '') + 'R$ ' + Math.abs(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
